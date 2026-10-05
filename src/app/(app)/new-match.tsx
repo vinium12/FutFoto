@@ -16,6 +16,7 @@ import { Icon } from '@/components/icon';
 import { Input } from '@/components/input';
 import { Button } from '@/components/button';
 import { showCustomAlert } from '@/components/alert';
+import { CameraPanel } from '@/components/camera-panel';
 import { saveMatch } from '@/integration/matchStorage';
 
 const POSITIONS = ['Atacante', 'Meio-Campo', 'Lateral', 'Zagueiro', 'Goleiro'];
@@ -38,6 +39,7 @@ export default function NewMatchWeb() {
   const [rating, setRating] = useState(8.0);
   const [notes, setNotes] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   // Localização Manual Web
   const [locationName, setLocationName] = useState('');
@@ -122,7 +124,7 @@ export default function NewMatchWeb() {
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.title}>Registrar Craque da Partida (Web / Desktop)</Text>
-              <Text style={styles.subtitle}>Anexe fotos do computador e preencha as estatísticas da partida</Text>
+              <Text style={styles.subtitle}>Anexe uma foto do computador (ou tire com a webcam) e preencha as estatísticas</Text>
             </View>
           </View>
 
@@ -133,7 +135,16 @@ export default function NewMatchWeb() {
               <View style={styles.sectionCard}>
                 <Text style={styles.sectionTitle}>🖼️ Foto do Jogador (Área de Trabalho / PC)</Text>
 
-                {photoUri ? (
+                {cameraOpen ? (
+                  <CameraPanel
+                    height={360}
+                    onPhoto={(uri) => {
+                      setPhotoUri(uri);
+                      setCameraOpen(false);
+                    }}
+                    onClose={() => setCameraOpen(false)}
+                  />
+                ) : photoUri ? (
                   <View style={styles.photoWrapper}>
                     <Image
                       source={{ uri: photoUri }}
@@ -159,15 +170,26 @@ export default function NewMatchWeb() {
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity
-                  style={styles.browseBtn}
-                  onPress={() => fileInputRef.current?.click()}
-                >
-                  <Icon name="folder-open-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.browseBtnText}>
-                    {photoUri ? 'Trocar Imagem do Computador' : 'Procurar no Computador...'}
-                  </Text>
-                </TouchableOpacity>
+                {!cameraOpen && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.browseBtn}
+                      onPress={() => fileInputRef.current?.click()}
+                    >
+                      <Icon name="folder-open-outline" size={18} color="#FFFFFF" />
+                      <Text style={styles.browseBtnText}>
+                        {photoUri ? 'Trocar Imagem do Computador' : 'Procurar no Computador...'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.webcamBtn} onPress={() => setCameraOpen(true)}>
+                      <Icon name="camera" size={18} color={Colors.text} />
+                      <Text style={styles.webcamBtnText}>
+                        {photoUri ? 'Tirar Outra com a Webcam' : 'Tirar Foto com a Webcam'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
 
               {/* Seção 2: Local da Partida (Manual Desktop) */}
@@ -447,6 +469,24 @@ const styles = StyleSheet.create({
   } as any,
   browseBtnText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  webcamBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    height: 42,
+    borderRadius: 10,
+    marginTop: 8,
+    cursor: 'pointer',
+  } as any,
+  webcamBtnText: {
+    color: Colors.text,
     fontWeight: '700',
     fontSize: 14,
   },

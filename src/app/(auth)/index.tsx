@@ -7,10 +7,10 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { login } from '@/integration/authIntegration';
 import { Colors } from '@/constants/colors';
 import { Input } from '@/components/input';
 import { Button } from '@/components/button';
@@ -19,17 +19,17 @@ import { showCustomAlert } from '@/components/alert';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { setAuth } = useAuth();
+  const { auth, isLoading: authLoading, signIn } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
 
   const validate = () => {
-    const newErrors: { email?: string; password?: string } = {};
-    if (!email.trim()) {
-      newErrors.email = 'E-mail é obrigatório';
+    const newErrors: { username?: string; password?: string } = {};
+    if (!username.trim()) {
+      newErrors.username = 'Usuário é obrigatório';
     }
     if (!password) {
       newErrors.password = 'Senha é obrigatória';
@@ -43,15 +43,31 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const authData = await login(email, password);
-      setAuth(authData);
-      router.replace('/(app)/dashboard');
+      // Salva a sessão no contexto; o <Redirect> abaixo leva pro dashboard.
+      await signIn(username, password);
     } catch (error) {
-      showCustomAlert('Erro', 'Credenciais inválidas. Tente novamente.');
+      showCustomAlert(
+        'Erro',
+        error instanceof Error ? error.message : 'Não foi possível entrar. Tente novamente.'
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Enquanto lê a sessão salva, mostra um loading.
+  if (authLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  // Já está logado (sessão salva ou login que acabou de dar certo): vai pro app.
+  if (auth) {
+    return <Redirect href="/(app)/dashboard" />;
+  }
 
   return (
     <KeyboardAvoidingView
@@ -70,14 +86,14 @@ export default function LoginScreen() {
 
           <View style={styles.form}>
             <Input
-              label="E-mail"
-              placeholder="admin@futfoto.com ou usuario@futfoto.com"
-              keyboardType="email-address"
+              label="Usuário"
+              placeholder="Digite seu usuário"
               autoCapitalize="none"
-              icon="mail-outline"
-              value={email}
-              onChangeText={setEmail}
-              error={errors.email}
+              autoCorrect={false}
+              icon="person-outline"
+              value={username}
+              onChangeText={setUsername}
+              error={errors.username}
             />
 
             <Input
@@ -87,6 +103,7 @@ export default function LoginScreen() {
               icon="lock-closed-outline"
               value={password}
               onChangeText={setPassword}
+              onSubmitEditing={handleLogin}
               error={errors.password}
             />
 
@@ -95,15 +112,6 @@ export default function LoginScreen() {
               onPress={handleLogin}
               isLoading={isLoading}
               style={styles.submitBtn}
-            />
-
-            <Button
-              title="Entrar como Admin"
-              variant="secondary"
-              onPress={() => {
-                setEmail('admin@futfoto.com');
-                setPassword('123456');
-              }}
             />
 
             <TouchableOpacity

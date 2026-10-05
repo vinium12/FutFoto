@@ -17,6 +17,7 @@ import { Icon } from '@/components/icon';
 import { Input } from '@/components/input';
 import { Button } from '@/components/button';
 import { showCustomAlert } from '@/components/alert';
+import { CameraPanel } from '@/components/camera-panel';
 import { saveMatch } from '@/integration/matchStorage';
 
 const POSITIONS = ['Atacante', 'Meio-Campo', 'Lateral', 'Zagueiro', 'Goleiro'];
@@ -32,6 +33,7 @@ export default function NewMatchAndroid() {
   const [rating, setRating] = useState(8.0);
   const [notes, setNotes] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   // GPS State
   const [locationName, setLocationName] = useState('');
@@ -41,54 +43,22 @@ export default function NewMatchAndroid() {
   const [isLocating, setIsLocating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Câmera NATIVA
-  const handleTakePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        showCustomAlert('Permissão necessária', 'Permita o acesso à câmera para tirar a foto do jogador.');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.6,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const finalUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setPhotoUri(finalUri);
-      }
-    } catch (e) {
-      showCustomAlert('Erro', 'Não foi possível acionar a câmera.');
-    }
+  // Câmera dentro do app (CameraPanel): recebe a foto tirada e fecha a câmera
+  const handlePhotoTaken = (uri: string) => {
+    setPhotoUri(uri);
+    setCameraOpen(false);
   };
 
-  // Galeria
+  // Galeria (o seletor do sistema não precisa de permissão; a foto é copiada só ao salvar)
   const handlePickGallery = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        showCustomAlert('Permissão necessária', 'Permita o acesso à galeria.');
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        quality: 0.6,
-        base64: true,
+        quality: 0.7,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const finalUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setPhotoUri(finalUri);
+        setPhotoUri(result.assets[0].uri);
       }
     } catch (e) {
       showCustomAlert('Erro', 'Não foi possível selecionar da galeria.');
@@ -99,6 +69,12 @@ export default function NewMatchAndroid() {
   const handleGetLocation = async () => {
     setIsLocating(true);
     try {
+      if (!(await Location.hasServicesEnabledAsync())) {
+        showCustomAlert('GPS desligado', 'Ative a localização (GPS) do celular e tente novamente.');
+        setIsLocating(false);
+        return;
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         showCustomAlert('Permissão negada', 'Permita o acesso à localização para capturar o local do jogo.');
@@ -107,16 +83,22 @@ export default function NewMatchAndroid() {
       }
 
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
 
       setLatitude(loc.coords.latitude);
       setLongitude(loc.coords.longitude);
 
-      const addresses = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
+      // O endereço é um extra: se não conseguir, segue só com as coordenadas.
+      let addresses: Location.LocationGeocodedAddress[] = [];
+      try {
+        addresses = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+      } catch {
+        addresses = [];
+      }
 
       if (addresses && addresses.length > 0) {
         const item = addresses[0];
@@ -207,7 +189,13 @@ export default function NewMatchAndroid() {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>📸 Foto do Jogador</Text>
             
-            {photoUri ? (
+            {cameraOpen ? (
+              <CameraPanel
+                height={420}
+                onPhoto={handlePhotoTaken}
+                onClose={() => setCameraOpen(false)}
+              />
+            ) : photoUri ? (
               <View style={styles.photoWrapper}>
                 <Image
                   source={{ uri: photoUri }}
@@ -228,10 +216,11 @@ export default function NewMatchAndroid() {
               </View>
             )}
 
+            {!cameraOpen && (
             <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.photoActionBtn, styles.btnGreen]} onPress={handleTakePhoto}>
+              <TouchableOpacity style={[styles.photoActionBtn, styles.btnGreen]} onPress={() => setCameraOpen(true)}>
                 <Icon name="camera" size={18} color="#FFFFFF" />
-                <Text style={styles.photoBtnText}>Tirar Foto</Text>
+                <Text style={styles.photoBtnText}>{photoUri ? 'Tirar Outra' : 'Tirar Foto'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.photoActionBtn, styles.btnDark]} onPress={handlePickGallery}>
@@ -239,6 +228,7 @@ export default function NewMatchAndroid() {
                 <Text style={[styles.photoBtnText, { color: Colors.text }]}>Galeria</Text>
               </TouchableOpacity>
             </View>
+            )}
           </View>
 
           {/* Seção 2: Informações Básicas */}

@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { register } from '@/integration/authIntegration';
 import { Colors } from '@/constants/colors';
 import { Input } from '@/components/input';
 import { Button } from '@/components/button';
@@ -19,16 +18,17 @@ import { showCustomAlert } from '@/components/alert';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { setAuth } = useAuth();
+  const { signUp } = useAuth();
 
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [cep, setCep] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
+    if (!username.trim() || !email.trim() || !cep.trim() || !password.trim()) {
       showCustomAlert('Erro', 'Por favor, preencha todos os campos.');
       return;
     }
@@ -40,11 +40,14 @@ export default function RegisterScreen() {
 
     setIsLoading(true);
     try {
-      const authData = await register(name, email, password);
-      setAuth(authData);
+      // A API cria o usuário e já devolve o cookie de login.
+      await signUp(username, password, email, cep);
       router.replace('/(app)/dashboard');
     } catch (error) {
-      showCustomAlert('Erro', 'Não foi possível realizar o cadastro.');
+      showCustomAlert(
+        'Erro',
+        error instanceof Error ? error.message : 'Não foi possível realizar o cadastro.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -67,11 +70,13 @@ export default function RegisterScreen() {
 
           <View style={styles.form}>
             <Input
-              label="Nome Completo"
-              placeholder="Ex: Neymar Jr"
+              label="Usuário"
+              placeholder="Escolha um nome de usuário"
+              autoCapitalize="none"
+              autoCorrect={false}
               icon="person-outline"
-              value={name}
-              onChangeText={setName}
+              value={username}
+              onChangeText={setUsername}
             />
 
             <Input
@@ -82,6 +87,15 @@ export default function RegisterScreen() {
               icon="mail-outline"
               value={email}
               onChangeText={setEmail}
+            />
+
+            <Input
+              label="CEP"
+              placeholder="Digite seu CEP"
+              keyboardType="numeric"
+              icon="location-outline"
+              value={cep}
+              onChangeText={setCep}
             />
 
             <Input

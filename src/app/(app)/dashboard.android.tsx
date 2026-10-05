@@ -15,7 +15,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { logout } from '@/integration/authIntegration';
 import {
   getMatches,
   deleteMatch,
@@ -26,7 +25,7 @@ import { MatchPlayerRecord } from '@/@types/match';
 
 export default function DashboardAndroid() {
   const router = useRouter();
-  const { auth, setAuth } = useAuth();
+  const { auth, signOut } = useAuth();
 
   const [matches, setMatches] = useState<MatchPlayerRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,8 +62,7 @@ export default function DashboardAndroid() {
         text: 'Sair',
         style: 'destructive',
         onPress: async () => {
-          await logout();
-          setAuth(null);
+          await signOut();
           router.replace('/(auth)');
         },
       },

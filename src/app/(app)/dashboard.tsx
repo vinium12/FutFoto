@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { logout } from '@/integration/authIntegration';
 import {
   getMatches,
   deleteMatch,
@@ -25,7 +24,7 @@ import { showCustomAlert } from '@/components/alert';
 
 export default function DashboardWeb() {
   const router = useRouter();
-  const { auth, setAuth } = useAuth();
+  const { auth, signOut } = useAuth();
 
   const [matches, setMatches] = useState<MatchPlayerRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,8 +53,7 @@ export default function DashboardWeb() {
         text: 'Sair',
         style: 'destructive',
         onPress: async () => {
-          await logout();
-          setAuth(null);
+          await signOut();
           router.replace('/(auth)');
         },
       },

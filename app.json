@@ -11,10 +11,20 @@
       "backgroundColor": "#0D0F12"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Permita o acesso à câmera para fotografar os jogadores.",
+        "NSPhotoLibraryUsageDescription": "Permita escolher fotos dos jogadores na galeria.",
+        "NSLocationWhenInUseUsageDescription": "A localização identifica onde a partida aconteceu."
+      }
     },
     "android": {
-      "backgroundColor": "#0D0F12"
+      "backgroundColor": "#0D0F12",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -24,7 +34,26 @@
       "expo-router",
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permita o acesso à câmera para fotografar os jogadores."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita escolher fotos dos jogadores na galeria.",
+          "cameraPermission": "Permita o acesso à câmera para fotografar os jogadores."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "A localização identifica onde a partida aconteceu."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

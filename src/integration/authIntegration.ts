@@ -1,63 +1,115 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthState, MessageResponse } from '@/@types/auth';
+import { AuthClaims, AuthState, MessageResponse } from '@/@types/auth';
+import * as authMock from './authMock';
 
-const STORAGE_AUTH_KEY = '@futfoto:auth';
+// Backend de login da Fatec (Spring Boot + JWT).
+// O token JWT fica num cookie httpOnly setado pelo servidor, por isso toda
+// chamada precisa de `credentials: 'include'` (fetch) / `withCredentials` (axios).
+export const API_URL = 'https://login-api-j9cl.onrender.com/fatec/login';
 
-// Instância base do axios para quando conectar à API real
+// false = usa a API de verdade acima (com cookie). É o que vale na entrega.
+// true  = usa o login de mentira (contas salvas no aparelho, sem internet).
+//         Serve pra testar o resto do app se a API estiver fora do ar.
+//         Entra com "futfoto" / "123456" ou cadastra uma conta.
+export const USE_MOCK = true;
+
+// Tempo máximo de espera. O Render (plano grátis) pode levar ~1 min pra "acordar".
+const TIMEOUT_MS = 60000;
+
+// Instância do axios já pronta pra futuras chamadas autenticadas (envia o cookie).
 export const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: API_URL,
   timeout: 10000,
+  withCredentials: true,
 });
 
-api.interceptors.request.use(async (config) => {
-  const authData = await AsyncStorage.getItem(STORAGE_AUTH_KEY);
-  if (authData) {
-    const { token } = JSON.parse(authData);
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+// POST com cookie. Se não conseguir falar com o servidor, devolve uma mensagem amigável.
+async function post(caminho: string, corpo?: object): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    return await fetch(`${API_URL}${caminho}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: corpo ? JSON.stringify(corpo) : undefined,
+      signal: controller.signal,
+    });
+  } catch {
+    if (controller.signal.aborted) {
+      throw new Error('O servidor demorou demais para responder. Tente novamente.');
     }
+    throw new Error('Não foi possível conectar ao servidor. Tente novamente em instantes.');
+  } finally {
+    clearTimeout(timer);
   }
-  return config;
-});
-
-export async function login(email: string, _password: string): Promise<AuthState> {
-  // Mock de autenticação com roles
-  const isAdmin = email.toLowerCase().includes('admin');
-  const mockAuth: AuthState = {
-    token: 'mock-jwt-token-' + Date.now(),
-    user: {
-      id: '1',
-      name: email.split('@')[0] || 'Jogador',
-      email: email,
-      roles: isAdmin ? [{ name: 'ROLE_ADMIN' }, { name: 'ROLE_USER' }] : [{ name: 'ROLE_USER' }],
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=60',
-    },
-    roles: isAdmin ? [{ name: 'ROLE_ADMIN' }, { name: 'ROLE_USER' }] : [{ name: 'ROLE_USER' }],
-  };
-
-  await AsyncStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(mockAuth));
-  return mockAuth;
 }
 
-export async function register(name: string, email: string, _password: string): Promise<AuthState> {
-  const mockAuth: AuthState = {
-    token: 'mock-jwt-token-' + Date.now(),
-    user: {
-      id: '2',
-      name,
-      email,
-      roles: [{ name: 'ROLE_USER' }],
-    },
-    roles: [{ name: 'ROLE_USER' }],
-  };
+// Converte a resposta da API em erro legível (ou nos dados do usuário, se deu certo).
+async function tratarResposta(resp: Response): Promise<AuthState> {
+  if (!resp.ok) {
+    let mensagem = 'Não foi possível concluir a operação. Tente novamente.';
 
-  await AsyncStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(mockAuth));
-  return mockAuth;
+    if (resp.status === 401 || resp.status === 403) {
+      mensagem = 'Usuário ou senha inválidos.';
+    } else if (resp.status === 409) {
+      mensagem = 'Esse usuário já existe.';
+    }
+
+    try {
+      const corpo = await resp.json();
+      if (corpo?.message) mensagem = corpo.message;
+    } catch {
+      // corpo vazio ou não é JSON: mantém a mensagem padrão acima
+    }
+
+    throw new Error(mensagem);
+  }
+
+  const claims: AuthClaims = await resp.json();
+  const roles = claims.roles ?? [];
+
+  return {
+    user: { id: claims.userId, name: claims.username, roles },
+    roles,
+  };
 }
 
+// POST /v1/auth — autentica usuário e senha já cadastrados.
+export async function login(username: string, password: string): Promise<AuthState> {
+  if (USE_MOCK) return authMock.login(username, password);
+
+  const resp = await post('/v1/auth', { username, password });
+  return tratarResposta(resp);
+}
+
+// POST /v1/create — cria um novo usuário e já efetua o login.
+export async function register(
+  username: string,
+  password: string,
+  email: string,
+  cep: string
+): Promise<AuthState> {
+  if (USE_MOCK) return authMock.register(username, password, email, cep);
+
+  const resp = await post('/v1/create', { username, password, email, cep });
+  return tratarResposta(resp);
+}
+
+// POST /v1/logout — limpa o cookie do token no backend.
+// "Melhor esforço": se o servidor estiver fora do ar, o app limpa o estado local mesmo assim.
 export async function logout(): Promise<void> {
-  await AsyncStorage.removeItem(STORAGE_AUTH_KEY);
+  if (USE_MOCK) return authMock.logout();
+
+  try {
+    await fetch(`${API_URL}/v1/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // sem conexão com o backend: segue o logout local
+  }
 }
 
 export async function getMessage(): Promise<MessageResponse> {

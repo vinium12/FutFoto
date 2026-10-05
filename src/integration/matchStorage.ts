@@ -1,7 +1,9 @@
 import { Platform, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { MatchPlayerRecord } from '@/@types/match';
+import { persistPhoto, deletePhoto } from './photoStorage';
 
 const FILE_NAME = 'partidas_banco.json';
 const STORAGE_KEY = '@futfoto:partidas_json_db';
@@ -91,31 +93,53 @@ export async function getMatches(): Promise<MatchPlayerRecord[]> {
   }
 }
 
+// Grava a lista inteira no banco.
+// CELULAR: o arquivo .json é o banco principal (erro aqui sobe pro usuário);
+//          o AsyncStorage é só cópia de segurança.
+// NAVEGADOR: o AsyncStorage (localStorage) é o único lugar, então avisa se estourar o limite.
+async function writeAll(list: MatchPlayerRecord[]): Promise<void> {
+  const jsonContent = JSON.stringify(list, null, 2);
+  const fileUri = getDatabaseFileUri();
+
+  if (fileUri) {
+    await FileSystem.writeAsStringAsync(fileUri, jsonContent, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
+    } catch (e) {
+      console.warn('Cópia de segurança no AsyncStorage falhou:', e);
+    }
+    return;
+  }
+
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
+  } catch {
+    throw new Error('Sem espaço para guardar os registros neste navegador. Apague alguns e tente de novo.');
+  }
+}
+
 // Gravação direta na base de dados do arquivo .json
 export async function saveMatch(match: Omit<MatchPlayerRecord, 'id' | 'matchDate'>): Promise<MatchPlayerRecord> {
   const current = await getMatches();
+
+  // Guarda a foto em arquivo (celular) ou reduzida (navegador); no banco vai só a referência
+  const photoUri = await persistPhoto(match.photoUri);
+
   const newRecord: MatchPlayerRecord = {
     ...match,
+    photoUri,
     id: Date.now().toString(),
     matchDate: new Date().toISOString(),
   };
 
-  const updated = [newRecord, ...current];
-  const jsonContent = JSON.stringify(updated, null, 2);
-
-  const fileUri = getDatabaseFileUri();
-  if (fileUri) {
-    try {
-      await FileSystem.writeAsStringAsync(fileUri, jsonContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-    } catch (e) {
-      console.warn('Erro ao salvar no arquivo .json físico:', e);
-    }
+  try {
+    await writeAll([newRecord, ...current]);
+  } catch (e) {
+    await deletePhoto(photoUri); // não deixa foto órfã se o registro não foi salvo
+    throw e;
   }
-
-  // Sincroniza também no AsyncStorage (Web / redundância)
-  await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
 
   return newRecord;
 }
@@ -123,21 +147,41 @@ export async function saveMatch(match: Omit<MatchPlayerRecord, 'id' | 'matchDate
 // Remoção de registro do arquivo .json
 export async function deleteMatch(id: string): Promise<void> {
   const current = await getMatches();
-  const filtered = current.filter((m) => m.id !== id);
-  const jsonContent = JSON.stringify(filtered, null, 2);
+  const removed = current.find((m) => m.id === id);
 
-  const fileUri = getDatabaseFileUri();
-  if (fileUri) {
-    try {
-      await FileSystem.writeAsStringAsync(fileUri, jsonContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-    } catch (e) {
-      console.warn(e);
-    }
+  await writeAll(current.filter((m) => m.id !== id));
+  await deletePhoto(removed?.photoUri ?? null);
+}
+
+// Exporta o banco .json: baixa o arquivo (navegador) ou abre o "compartilhar" (celular)
+export async function exportMatchesJsonFile(): Promise<void> {
+  const matches = await getMatches();
+  const jsonContent = JSON.stringify(matches, null, 2);
+
+  if (Platform.OS === 'web') {
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = FILE_NAME;
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
   }
 
-  await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error('Compartilhamento indisponível neste aparelho.');
+  }
+
+  const exportUri = `${FileSystem.cacheDirectory}${FILE_NAME}`;
+  await FileSystem.writeAsStringAsync(exportUri, jsonContent, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  await Sharing.shareAsync(exportUri, {
+    mimeType: 'application/json',
+    dialogTitle: 'Exportar banco de dados JSON',
+    UTI: 'public.json',
+  });
 }
 
 // Compartilha o resumo do craque nas redes / WhatsApp

@@ -1,59 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Image,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { getMessage, logout } from '@/integration/authIntegration';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Colors } from '@/constants/colors';
-import { Card } from '@/components/card';
-import { List } from '@/components/list';
-import { Input } from '@/components/input';
+import { useAuth } from '@/contexts/AuthContext';
+import { logout } from '@/integration/authIntegration';
+import {
+  getMatches,
+  deleteMatch,
+  shareMatchSummary,
+  exportMatchesJsonFile,
+} from '@/integration/matchStorage';
+import { MatchPlayerRecord } from '@/@types/match';
 import { Icon } from '@/components/icon';
 import { showCustomAlert } from '@/components/alert';
-import { MOCK_CARDS, CardItem } from '@/data/futfoto';
 
 export default function DashboardWeb() {
   const router = useRouter();
   const { auth, setAuth } = useAuth();
 
-  const isAdmin = !!auth?.roles?.some(
-    (role) => (typeof role === 'string' ? role : role.name) === 'ROLE_ADMIN' || (typeof role === 'string' ? role : role.name) === 'admin'
-  );
+  const [matches, setMatches] = useState<MatchPlayerRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'gold' | 'silver' | 'legendary'>('all');
-  const [serverMessage, setServerMessage] = useState('');
-  const [isLoadingMsg, setIsLoadingMsg] = useState(false);
-
-  useEffect(() => {
-    async function loadInfo() {
-      setIsLoadingMsg(true);
-      try {
-        const data = await getMessage();
-        setServerMessage(data.message);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoadingMsg(false);
-      }
+  const loadData = async () => {
+    try {
+      const data = await getMatches();
+      setMatches(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
-    loadInfo();
-  }, []);
+  };
 
-  const filteredCards = MOCK_CARDS.filter((card) => {
-    const matchesSearch =
-      card.name.toLowerCase().includes(search.toLowerCase()) ||
-      card.club.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || card.rarity === selectedFilter;
-    return matchesSearch && matchesFilter;
-  });
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleLogout = () => {
     showCustomAlert('Sair da Conta', 'Deseja realmente sair da sua conta?', [
@@ -70,97 +63,141 @@ export default function DashboardWeb() {
     ]);
   };
 
-  const handleCardPress = (card: CardItem) => {
-    showCustomAlert(
-      card.name,
-      `Clube: ${card.club}\nPosição: ${card.position}\nOverall: ${card.overall}\nRaridade: ${card.rarity.toUpperCase()}`
-    );
+  const handleDelete = (id: string, name: string) => {
+    showCustomAlert('Excluir Registro', `Deseja remover ${name} do arquivo .json?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMatch(id);
+          loadData();
+        },
+      },
+    ]);
+  };
+
+  const handleExportJson = async () => {
+    setIsExporting(true);
+    try {
+      await exportMatchesJsonFile();
+      showCustomAlert('Sucesso', 'Arquivo partidas_futfoto.json gerado para download!');
+    } catch (e) {
+      showCustomAlert('Erro', 'Não foi possível exportar o arquivo JSON.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
-        {/* Header com Informações do Usuário e Logout */}
+        {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Olá, {auth?.user?.name || 'Jogador'} 👋</Text>
-            <Text style={styles.subGreeting}>FutFoto Web Dashboard</Text>
-            {isAdmin && <Text style={styles.adminBadge}>ADMINISTRADOR</Text>}
+            <Text style={styles.greeting}>Olá, {auth?.user?.name || 'Scout'} 👋</Text>
+            <Text style={styles.subGreeting}>FutFoto - Gestão de Partidas e Craques</Text>
           </View>
           <View style={styles.headerActions}>
-            {isAdmin && (
-              <TouchableOpacity
-                style={styles.adminBtn}
-                onPress={() => router.push('/(app)/admin')}
-              >
-                <Icon name="shield-checkmark" size={18} color={Colors.accent} />
-                <Text style={styles.adminBtnText}>Admin</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={handleLogout}
-              accessibilityLabel="Sair"
-            >
-              <Icon name="log-out-outline" size={22} color={Colors.danger} />
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <Icon name="log-out-outline" size={20} color={Colors.danger} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Notificação / Status do Servidor */}
-        <View style={styles.statusBox}>
-          <Icon name="information-circle-outline" size={18} color={Colors.primary} />
-          {isLoadingMsg ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+        {/* Botão Registrar Novo Craque */}
+        <TouchableOpacity
+          style={styles.newMatchBtn}
+          onPress={() => router.push('/(app)/new-match')}
+        >
+          <View style={styles.iconCircle}>
+            <Icon name="camera" size={24} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <Text style={styles.newMatchTitle}>Registrar Novo Craque / Partida</Text>
+            <Text style={styles.newMatchSubtitle}>Tirar foto, pegar GPS e preencher gols/assistências</Text>
+          </View>
+          <Icon name="add-circle" size={26} color={Colors.primary} />
+        </TouchableOpacity>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>⚽ Partidas e Jogadores Salvos ({matches.length})</Text>
+            <Text style={styles.sectionSubtitle}>Dados persistidos no arquivo JSON local</Text>
+          </View>
+
+          {isLoading ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+          ) : matches.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Icon name="football-outline" size={56} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>Nenhuma partida registrada</Text>
+              <Text style={styles.emptyDesc}>Clique no botão acima para cadastrar a primeira partida.</Text>
+            </View>
           ) : (
-            <Text style={styles.statusText}>{serverMessage || 'Conectado ao sistema FutFoto'}</Text>
+            matches.map((item) => (
+              <View key={item.id} style={styles.card}>
+                <View style={styles.cardImageWrapper}>
+                  {item.photoUri ? (
+                    <Image source={{ uri: item.photoUri }} style={styles.cardImage} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.cardPlaceholder}>
+                      <Icon name="person" size={40} color={Colors.textMuted} />
+                    </View>
+                  )}
+                  <View style={styles.ratingBadge}>
+                    <Text style={styles.ratingText}>⭐ {item.rating.toFixed(1)}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.cardTopRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.playerName}>{item.playerName}</Text>
+                      <Text style={styles.playerPosition}>{item.position}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleDelete(item.id, item.playerName)}
+                      style={styles.deleteBtn}
+                    >
+                      <Icon name="trash-outline" size={18} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.statsRow}>
+                    <View style={styles.statPill}>
+                      <Text style={styles.statPillText}>⚽ {item.goals} {item.goals === 1 ? 'Gol' : 'Gols'}</Text>
+                    </View>
+                    <View style={styles.statPill}>
+                      <Text style={styles.statPillText}>🎯 {item.assists} Ast</Text>
+                    </View>
+                    {item.yellowCards > 0 && (
+                      <View style={[styles.statPill, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                        <Text style={[styles.statPillText, { color: Colors.accent }]}>🟨 {item.yellowCards}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.locationRow}>
+                    <Icon name="location-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {item.location.addressName || 'Campo Local'} • {item.location.city || ''}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => shareMatchSummary(item)}
+                  >
+                    <Icon name="share-social-outline" size={16} color={Colors.primary} />
+                    <Text style={styles.shareBtnText}>Compartilhar Craque</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
           )}
-        </View>
-
-        {/* Busca */}
-        <Input
-          placeholder="Buscar jogador ou clube..."
-          icon="search-outline"
-          value={search}
-          onChangeText={setSearch}
-          containerStyle={styles.searchContainer}
-        />
-
-        {/* Filtros rápidos por raridade */}
-        <View style={styles.filterWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterList}>
-            {(['all', 'gold', 'silver', 'legendary'] as const).map((rarity) => (
-              <TouchableOpacity
-                key={rarity}
-                style={[
-                  styles.filterChip,
-                  selectedFilter === rarity && styles.filterChipActive,
-                ]}
-                onPress={() => setSelectedFilter(rarity)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedFilter === rarity && styles.filterChipTextActive,
-                  ]}
-                >
-                  {rarity === 'all' ? 'Todos' : rarity.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Lista de Cards */}
-        <View style={styles.listContainer}>
-          <List
-            data={filteredCards}
-            emptyMessage="Nenhum jogador encontrado com esses filtros."
-            renderItem={({ item }) => (
-              <Card card={item} onPress={() => handleCardPress(item)} />
-            )}
-          />
-        </View>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -191,98 +228,204 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   subGreeting: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     marginTop: 2,
-  },
-  adminBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.accent,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginTop: 4,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  adminBtn: {
+  exportTopBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: Colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.accent,
   },
-  adminBtnText: {
+  exportTopBtnText: {
     color: Colors.accent,
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
   },
   logoutBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  statusBox: {
+  newMatchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     backgroundColor: Colors.surface,
-    padding: 12,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    marginBottom: 20,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newMatchTitle: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  newMatchSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  list: {
+    paddingBottom: 30,
+  },
+  sectionHeader: {
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: Colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  sectionSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
+    overflow: 'hidden',
     marginBottom: 16,
   },
-  statusText: {
+  cardImageWrapper: {
+    position: 'relative',
+    height: 180,
+    backgroundColor: Colors.surfaceLight,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  ratingText: {
+    color: Colors.accent,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  playerName: {
+    color: Colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  playerPosition: {
     color: Colors.textSecondary,
     fontSize: 13,
-    flex: 1,
+    marginTop: 2,
   },
-  searchContainer: {
-    marginBottom: 12,
+  deleteBtn: {
+    padding: 4,
   },
-  filterWrapper: {
-    marginBottom: 12,
-  },
-  filterList: {
+  statsRow: {
+    flexDirection: 'row',
     gap: 8,
+    marginBottom: 10,
   },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
+  statPill: {
+    backgroundColor: Colors.surfaceLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  filterChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  filterChipText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
+  statPillText: {
+    color: Colors.text,
+    fontSize: 12,
     fontWeight: '700',
   },
-  filterChipTextActive: {
-    color: '#FFFFFF',
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
   },
-  listContainer: {
+  locationText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
     flex: 1,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceLight,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  shareBtnText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  emptyDesc: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

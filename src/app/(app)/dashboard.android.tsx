@@ -1,211 +1,229 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
   ActivityIndicator,
   Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+  RefreshControl,
 } from 'react-native';
-
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMessage, logout } from '@/integration/authIntegration';
+import { logout } from '@/integration/authIntegration';
+import {
+  getMatches,
+  deleteMatch,
+  shareMatchSummary,
+  exportMatchesJsonFile,
+} from '@/integration/matchStorage';
+import { MatchPlayerRecord } from '@/@types/match';
 
-export default function Dashboard() {
+export default function DashboardAndroid() {
   const router = useRouter();
   const { auth, setAuth } = useAuth();
 
-  const isAdmin = !!auth?.roles?.some(
-    (role) => (typeof role === 'string' ? role : role.name) === 'ROLE_ADMIN' || (typeof role === 'string' ? role : role.name) === 'admin'
-  );
+  const [matches, setMatches] = useState<MatchPlayerRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const [message, setMessage] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchMessage();
-  }, []);
-
-  async function fetchMessage() {
-    setError('');
-    setIsLoading(true);
-
+  const loadData = async () => {
     try {
-      const data = await getMessage();
-      setMessage(data.message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao buscar mensagem do servidor');
+      const data = await getMatches();
+      setMatches(data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
-  }
+  };
 
-  async function handleTakePickPhoto() {
-    try {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permissão necessária', 'É necessário permitir o acesso à câmera para tirar fotos.');
-        return;
-      }
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
-        Alert.alert('Sucesso', 'Foto capturada com sucesso!');
-      }
-    } catch (e) {
-      Alert.alert('Erro', 'Não foi possível abrir a câmera.');
-    }
-  }
-
-  async function handlePickFromGallery() {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permissão necessária', 'É necessário permitir o acesso à galeria.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
-        Alert.alert('Sucesso', 'Foto selecionada da galeria!');
-      }
-    } catch (e) {
-      Alert.alert('Erro', 'Não foi possível selecionar foto da galeria.');
-    }
-  }
-
-  async function handleLogout() {
+  const handleLogout = () => {
     Alert.alert('Sair da Conta', 'Deseja realmente sair?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Sair',
         style: 'destructive',
         onPress: async () => {
-          setIsLoggingOut(true);
-          try {
-            await logout();
-            setAuth(null);
-            router.replace('/(auth)');
-          } catch (err) {
-            Alert.alert('Erro', 'Falha ao deslogar.');
-          } finally {
-            setIsLoggingOut(false);
-          }
+          await logout();
+          setAuth(null);
+          router.replace('/(auth)');
         },
       },
     ]);
-  }
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert('Excluir Registro', `Deseja remover ${name} do arquivo .json?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteMatch(id);
+          loadData();
+        },
+      },
+    ]);
+  };
+
+  const handleExportJson = async () => {
+    setIsExporting(true);
+    try {
+      await exportMatchesJsonFile();
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível exportar o arquivo JSON.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
       <StatusBar style="light" backgroundColor={Colors.background} />
-      <Stack.Screen options={{ title: 'FutFoto Dashboard', headerShown: false }} />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header com Perfil e Ação de Sair */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.welcomeText}>Bem-vindo,</Text>
-            <Text style={styles.userName}>{auth?.user?.name || 'Jogador'}</Text>
-            {isAdmin && <Text style={styles.adminBadge}>ADMINISTRADOR</Text>}
+            <Text style={styles.userName}>{auth?.user?.name || 'Scout'}</Text>
           </View>
-          <Pressable
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            disabled={isLoggingOut}
-          >
-            {isLoggingOut ? (
-              <ActivityIndicator size="small" color={Colors.danger} />
-            ) : (
-              <Ionicons name="log-out-outline" size={24} color={Colors.danger} />
-            )}
-          </Pressable>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={22} color={Colors.danger} />
+          </TouchableOpacity>
         </View>
 
-        {/* Mensagem da Integração */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Status do Sistema</Text>
+        {/* Botão de Ação Principal: Novo Registro com Câmera e GPS */}
+        <TouchableOpacity
+          style={styles.newMatchBtn}
+          onPress={() => router.push('/(app)/new-match')}
+        >
+          <View style={styles.newMatchIconBox}>
+            <Ionicons name="camera" size={26} color="#FFFFFF" />
           </View>
-          {isLoading ? (
-            <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 8 }} />
-          ) : error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : (
-            <Text style={styles.messageText}>{message}</Text>
-          )}
-        </View>
-
-        {/* Área de Câmera / Foto */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="camera-outline" size={20} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Capturar / Selecionar Foto</Text>
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <Text style={styles.newMatchTitle}>Registrar Novo Craque</Text>
+            <Text style={styles.newMatchSubtitle}>Tirar foto, pegar GPS e marcar gols</Text>
           </View>
+          <Ionicons name="add-circle" size={28} color={Colors.primary} />
+        </TouchableOpacity>
 
-          {photoUri ? (
-            <View style={styles.photoPreviewContainer}>
-              <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-              <Pressable
-                style={styles.removePhotoButton}
-                onPress={() => setPhotoUri(null)}
-              >
-                <Ionicons name="close-circle" size={28} color={Colors.danger} />
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Ionicons name="image-outline" size={48} color={Colors.textSecondary} />
-              <Text style={styles.placeholderText}>Nenhuma foto selecionada ainda</Text>
-            </View>
-          )}
-
-          <View style={styles.actionRow}>
-            <Pressable style={[styles.actionBtn, styles.btnPrimary]} onPress={handleTakePickPhoto}>
-              <Ionicons name="camera" size={18} color="#FFFFFF" />
-              <Text style={styles.btnText}>Tirar Foto</Text>
-            </Pressable>
-            <Pressable style={[styles.actionBtn, styles.btnSecondary]} onPress={handlePickFromGallery}>
-              <Ionicons name="images" size={18} color={Colors.text} />
-              <Text style={[styles.btnText, { color: Colors.text }]}>Galeria</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Botão de Painel Admin se tiver permissão */}
-        {isAdmin && (
-          <Pressable
-            style={styles.adminCard}
+        {/* Barra de Ação Secundária: Admin se for administrador */}
+        {auth?.roles?.some((r) => (typeof r === 'string' ? r : r.name).includes('ADMIN')) && (
+          <TouchableOpacity
+            style={styles.adminBtn}
             onPress={() => router.push('/(app)/admin')}
           >
-            <Ionicons name="shield-checkmark" size={24} color={Colors.accent} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.adminCardTitle}>Painel Administrativo</Text>
-              <Text style={styles.adminCardDesc}>Gerencie fotos, usuários e permissões</Text>
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.secondary} />
+            <Text style={styles.adminBtnText}>Acessar Painel de Moderação Admin</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Título da Lista de Partidas */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>⚽ Partidas e Craques Salvos ({matches.length})</Text>
+          <Text style={styles.sectionSubtitle}>Persistência em arquivo JSON</Text>
+        </View>
+
+        {/* Lista de Registros */}
+        {isLoading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 30 }} />
+        ) : matches.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="football-outline" size={56} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>Nenhuma partida registrada</Text>
+            <Text style={styles.emptyDesc}>Toque em "Registrar Novo Craque" para tirar a primeira foto.</Text>
+          </View>
+        ) : (
+          matches.map((item) => (
+            <View key={item.id} style={styles.matchCard}>
+              {/* Foto do Jogador */}
+              <View style={styles.cardImageWrapper}>
+                {item.photoUri ? (
+                  <Image source={{ uri: item.photoUri }} style={styles.cardImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.cardImagePlaceholder}>
+                    <Ionicons name="person" size={40} color={Colors.textMuted} />
+                  </View>
+                )}
+                <View style={styles.ratingBadge}>
+                  <Text style={styles.ratingBadgeText}>⭐ {item.rating.toFixed(1)}</Text>
+                </View>
+              </View>
+
+              {/* Informações */}
+              <View style={styles.cardContent}>
+                <View style={styles.cardTopRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.playerName} numberOfLines={1}>{item.playerName}</Text>
+                    <Text style={styles.playerPosition}>{item.position}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item.id, item.playerName)}
+                    style={styles.deleteBtn}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Estatísticas resumidas */}
+                <View style={styles.statsBadgeRow}>
+                  <View style={styles.statPill}>
+                    <Text style={styles.statPillText}>⚽ {item.goals} {item.goals === 1 ? 'Gol' : 'Gols'}</Text>
+                  </View>
+                  <View style={styles.statPill}>
+                    <Text style={styles.statPillText}>🎯 {item.assists} Ast</Text>
+                  </View>
+                  {item.yellowCards > 0 && (
+                    <View style={[styles.statPill, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                      <Text style={[styles.statPillText, { color: Colors.accent }]}>🟨 {item.yellowCards}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Localização GPS */}
+                <View style={styles.locationRow}>
+                  <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {item.location.addressName || 'Campo Local'} • {item.location.city || ''}
+                  </Text>
+                </View>
+
+                {/* Botão Compartilhar NATIVO */}
+                <TouchableOpacity
+                  style={styles.shareBtn}
+                  onPress={() => shareMatchSummary(item)}
+                >
+                  <Ionicons name="share-social-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.shareBtnText}>Compartilhar Estatísticas</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </Pressable>
+          ))
         )}
       </ScrollView>
     </View>
@@ -220,12 +238,13 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingTop: 50,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   welcomeText: {
     fontSize: 14,
@@ -233,21 +252,10 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '900',
     color: Colors.text,
   },
-  adminBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.accent,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  logoutButton: {
+  logoutBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -257,109 +265,205 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  card: {
+  newMatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  messageText: {
-    color: Colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  errorText: {
-    color: Colors.danger,
-    fontSize: 14,
-  },
-  placeholderContainer: {
-    height: 160,
-    backgroundColor: Colors.surfaceLight,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-  },
-  placeholderText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 8,
-  },
-  photoPreviewContainer: {
-    position: 'relative',
-    height: 200,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
     marginBottom: 14,
   },
-  photoPreview: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-  },
-  removePhotoButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  btnPrimary: {
+  newMatchIconBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: Colors.primary,
-  },
-  btnSecondary: {
-    backgroundColor: Colors.surfaceLight,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  btnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  adminCard: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    marginTop: 8,
   },
-  adminCardTitle: {
+  newMatchTitle: {
     color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
-  adminCardDesc: {
+  newMatchSubtitle: {
     color: Colors.textSecondary,
     fontSize: 12,
     marginTop: 2,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  exportBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  exportBtnText: {
+    color: Colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  adminBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surface,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.secondary,
+  },
+  adminBtnText: {
+    color: Colors.secondary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  sectionHeader: {
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  sectionSubtitle: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  matchCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  cardImageWrapper: {
+    position: 'relative',
+    height: 180,
+    backgroundColor: Colors.surfaceLight,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  ratingBadgeText: {
+    color: Colors.accent,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  playerName: {
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  playerPosition: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  deleteBtn: {
+    padding: 6,
+  },
+  statsBadgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  statPill: {
+    backgroundColor: Colors.surfaceLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  statPillText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 14,
+  },
+  locationText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    flex: 1,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceLight,
+    height: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  shareBtnText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 12,
+  },
+  emptyDesc: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

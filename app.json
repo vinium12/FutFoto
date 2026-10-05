@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "FutFoto",
+    "slug": "futfoto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "futfoto",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0D0F12"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "backgroundColor": "#0D0F12"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

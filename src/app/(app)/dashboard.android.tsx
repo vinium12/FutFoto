@@ -132,16 +132,7 @@ export default function DashboardAndroid() {
           <Ionicons name="add-circle" size={28} color={Colors.primary} />
         </TouchableOpacity>
 
-        {/* Barra de Ação Secundária: Admin se for administrador */}
-        {auth?.roles?.some((r) => (typeof r === 'string' ? r : r.name).includes('ADMIN')) && (
-          <TouchableOpacity
-            style={styles.adminBtn}
-            onPress={() => router.push('/(app)/admin')}
-          >
-            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.secondary} />
-            <Text style={styles.adminBtnText}>Acessar Painel de Moderação Admin</Text>
-          </TouchableOpacity>
-        )}
+
 
         {/* Título da Lista de Partidas */}
         <View style={styles.sectionHeader}>

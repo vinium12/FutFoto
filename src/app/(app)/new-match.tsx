@@ -52,9 +52,9 @@ export default function NewMatchScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
+        mediaTypes: ['images'],
         quality: 0.8,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -75,9 +75,9 @@ export default function NewMatchScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
+        mediaTypes: ['images'],
         quality: 0.8,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -203,7 +203,7 @@ export default function NewMatchScreen() {
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.title}>Registrar Craque da Partida</Text>
-              <Text style={styles.subtitle}>Foto, GPS e estatísticas salvas no banco JSON</Text>
+              <Text style={styles.subtitle}>Foto, GPS e estatísticas da partida</Text>
             </View>
           </View>
 
@@ -214,7 +214,6 @@ export default function NewMatchScreen() {
             {photoUri ? (
               <View style={styles.photoWrapper}>
                 <Image
-                  key={photoUri}
                   source={{ uri: photoUri }}
                   style={styles.photo}
                   resizeMode="cover"
@@ -223,8 +222,11 @@ export default function NewMatchScreen() {
                   style={styles.removePhotoBtn}
                   onPress={() => setPhotoUri(null)}
                 >
-                  <Icon name="close-circle" size={32} color={Colors.danger} />
+                  <Icon name="close-circle" size={34} color={Colors.danger} />
                 </TouchableOpacity>
+                <View style={styles.photoTag}>
+                  <Text style={styles.photoTagText}>✓ Foto Carregada</Text>
+                </View>
               </View>
             ) : (
               <View style={styles.noPhotoBox}>
@@ -404,7 +406,7 @@ export default function NewMatchScreen() {
 
           {/* Botão Salvar Registro */}
           <Button
-            title="💾 Salvar no Banco JSON"
+            title="💾 Salvar Dados do Jogador"
             isLoading={isSaving}
             onPress={handleSave}
             style={styles.saveBtn}
@@ -469,23 +471,36 @@ const styles = StyleSheet.create({
   photoWrapper: {
     position: 'relative',
     width: '100%',
-    height: 220,
+    height: 240,
     borderRadius: 14,
     overflow: 'hidden',
     marginBottom: 14,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: '#000000',
   },
   photo: {
     width: '100%',
-    height: 220,
-    borderRadius: 14,
+    height: '100%',
   },
   removePhotoBtn: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 18,
+  },
+  photoTag: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  photoTagText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
   },
   noPhotoBox: {
     height: 140,

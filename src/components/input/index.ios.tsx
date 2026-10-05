@@ -4,20 +4,12 @@ import {
   TextInput,
   Text,
   StyleSheet,
-  TextInputProps,
-  ViewStyle,
 } from 'react-native';
-import { colors } from '@/constants/colors';
-import { Icon, IconName } from '../icon';
+import { Ionicons } from '@expo/vector-icons';
+import { InputProps } from './types';
+import { Colors } from '@/constants/colors';
 
-interface InputProps extends TextInputProps {
-  label?: string;
-  error?: string;
-  icon?: IconName;
-  containerStyle?: ViewStyle;
-}
-
-export const Input: React.FC<InputProps> = ({
+const InputIOS: React.FC<InputProps> = ({
   label,
   error,
   icon,
@@ -30,11 +22,11 @@ export const Input: React.FC<InputProps> = ({
       <View style={[styles.inputWrapper, !!error && styles.inputError]}>
         {icon && (
           <View style={styles.iconContainer}>
-            <Icon name={icon} size={20} color={colors.textSecondary} />
+            <Ionicons name={icon} size={20} color={Colors.textSecondary} />
           </View>
         )}
         <TextInput
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={Colors.textMuted}
           style={styles.input}
           {...rest}
         />
@@ -46,11 +38,11 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 14,
     width: '100%',
   },
   label: {
-    color: colors.textSecondary,
+    color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 6,
@@ -58,28 +50,30 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: Colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: Colors.border,
     paddingHorizontal: 12,
-    height: 50,
+    height: 48,
   },
   inputError: {
-    borderColor: colors.danger,
+    borderColor: Colors.danger,
   },
   iconContainer: {
     marginRight: 10,
   },
   input: {
     flex: 1,
-    color: colors.text,
+    color: Colors.text,
     fontSize: 15,
     height: '100%',
   },
   errorText: {
-    color: colors.danger,
+    color: Colors.danger,
     fontSize: 12,
     marginTop: 4,
   },
 });
+
+export default InputIOS;

@@ -1,22 +1,15 @@
 import React from 'react';
 import {
   FlatList,
-  FlatListProps,
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { colors } from '@/constants/colors';
+import { CustomListProps } from './types';
+import { Colors } from '@/constants/colors';
 
-interface CustomListProps<T> extends Omit<FlatListProps<T>, 'renderItem'> {
-  data: T[];
-  renderItem: ({ item, index }: { item: T; index: number }) => React.ReactElement;
-  emptyMessage?: string;
-  isLoading?: boolean;
-}
-
-export function List<T>({
+export function ListAndroid<T>({
   data,
   renderItem,
   emptyMessage = 'Nenhum item encontrado',
@@ -26,7 +19,7 @@ export function List<T>({
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
@@ -72,8 +65,10 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyText: {
-    color: colors.textSecondary,
-    fontSize: 16,
+    color: Colors.textSecondary,
+    fontSize: 15,
     textAlign: 'center',
   },
 });
+
+export default ListAndroid;

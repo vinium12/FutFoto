@@ -8,7 +8,7 @@ export const Colors = {
   textSecondary: '#94A3B8',
   textMuted: '#64748B',
 
-  primary: '#10B981', // Verde Esmeralda (Tema futebol)
+  primary: '#10B981', // Verde Esmeralda
   primaryDark: '#059669',
   primaryLight: '#34D399',
   
@@ -19,6 +19,13 @@ export const Colors = {
   success: '#10B981',
   warning: '#F59E0B',
   info: '#3B82F6',
+
+  semantic: {
+    error: '#EF4444',
+    success: '#10B981',
+    info: '#3B82F6',
+    warning: '#F59E0B',
+  },
 
   card: {
     gold: '#F59E0B',

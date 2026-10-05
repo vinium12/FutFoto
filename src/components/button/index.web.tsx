@@ -1,24 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   TouchableOpacity,
   Text,
   StyleSheet,
   ActivityIndicator,
-  TouchableOpacityProps,
-  ViewStyle,
-  TextStyle,
 } from 'react-native';
-import { colors } from '@/constants/colors';
+import { ButtonProps } from './types';
+import { Colors } from '@/constants/colors';
 
-interface ButtonProps extends TouchableOpacityProps {
-  title: string;
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger';
-  isLoading?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
-}
-
-export const Button: React.FC<ButtonProps> = ({
+const ButtonWeb: React.FC<ButtonProps> = ({
   title,
   variant = 'primary',
   isLoading = false,
@@ -27,6 +17,8 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   ...rest
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
   const getVariantStyle = () => {
     switch (variant) {
       case 'secondary':
@@ -51,18 +43,23 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.85}
+      // @ts-ignore
+      onMouseEnter={() => setIsHovered(true)}
+      // @ts-ignore
+      onMouseLeave={() => setIsHovered(false)}
       disabled={isLoading || disabled}
       style={[
         styles.button,
         getVariantStyle(),
+        isHovered && !disabled && !isLoading && styles.btnHover,
         (isLoading || disabled) && styles.btnDisabled,
         style,
       ]}
       {...rest}
     >
       {isLoading ? (
-        <ActivityIndicator color={variant === 'outline' ? colors.primary : colors.text} />
+        <ActivityIndicator color={variant === 'outline' ? Colors.primary : Colors.text} />
       ) : (
         <Text style={[styles.text, getTextStyle(), textStyle]}>{title}</Text>
       )}
@@ -72,40 +69,51 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    height: 50,
+    height: 48,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginVertical: 8,
-  },
+    marginVertical: 6,
+    cursor: 'pointer',
+    transitionDuration: '150ms',
+    transitionProperty: 'all',
+  } as any,
   btnPrimary: {
-    backgroundColor: colors.primary,
+    backgroundColor: Colors.primary,
   },
   btnSecondary: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: Colors.surfaceLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: Colors.border,
   },
   btnOutline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: Colors.primary,
   },
   btnDanger: {
-    backgroundColor: colors.danger,
+    backgroundColor: Colors.danger,
   },
+  btnHover: {
+    opacity: 0.9,
+    transform: [{ translateY: -1 }],
+  } as any,
   btnDisabled: {
     opacity: 0.5,
-  },
+    cursor: 'not-allowed',
+  } as any,
   text: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-  },
+    userSelect: 'none',
+  } as any,
   textPrimary: {
     color: '#FFFFFF',
   },
   textOutline: {
-    color: colors.primary,
+    color: Colors.primary,
   },
 });
+
+export default ButtonWeb;

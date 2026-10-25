@@ -19,6 +19,7 @@ import { Button } from '@/components/button';
 import { showCustomAlert } from '@/components/alert';
 import { CameraPanel } from '@/components/camera-panel';
 import { saveMatch } from '@/integration/matchStorage';
+import { persistPhoto } from '@/integration/photoStorage';
 
 const POSITIONS = ['Atacante', 'Meio-Campo', 'Lateral', 'Zagueiro', 'Goleiro'];
 
@@ -43,22 +44,72 @@ export default function NewMatchAndroid() {
   const [isLocating, setIsLocating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Câmera dentro do app (CameraPanel): recebe a foto tirada e fecha a câmera
-  const handlePhotoTaken = (uri: string) => {
-    setPhotoUri(uri);
+  // Câmera nativa do sistema via ImagePicker (mais estável no Android)
+  const handleLaunchCamera = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showCustomAlert('Permissão negada', 'Autorize o acesso à câmera nas configurações para fotografar.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        allowsEditing: false,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        try {
+          const savedUri = await persistPhoto(asset.uri);
+          setPhotoUri(savedUri || asset.uri);
+        } catch {
+          if (asset.base64) {
+            setPhotoUri(`data:image/jpeg;base64,${asset.base64}`);
+          } else {
+            setPhotoUri(asset.uri);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Camera error:', e);
+      showCustomAlert('Erro', 'Não foi possível capturar a foto.');
+    }
+  };
+
+  const handlePhotoTaken = async (uri: string) => {
+    try {
+      const savedUri = await persistPhoto(uri);
+      setPhotoUri(savedUri || uri);
+    } catch {
+      setPhotoUri(uri);
+    }
     setCameraOpen(false);
   };
 
-  // Galeria (o seletor do sistema não precisa de permissão; a foto é copiada só ao salvar)
+  // Galeria (o seletor do sistema não precisa de permissão; a foto é copiada ao selecionar)
   const handlePickGallery = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setPhotoUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        try {
+          const savedUri = await persistPhoto(asset.uri);
+          setPhotoUri(savedUri || asset.uri);
+        } catch {
+          if (asset.base64) {
+            setPhotoUri(`data:image/jpeg;base64,${asset.base64}`);
+          } else {
+            setPhotoUri(asset.uri);
+          }
+        }
       }
     } catch (e) {
       showCustomAlert('Erro', 'Não foi possível selecionar da galeria.');
@@ -159,7 +210,7 @@ export default function NewMatchAndroid() {
       showCustomAlert('Sucesso!', 'Dados do jogador e foto salvos no banco de dados JSON!', [
         {
           text: 'OK',
-          onPress: () => router.back(),
+          onPress: () => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard')),
         },
       ]);
     } catch (error) {
@@ -176,7 +227,7 @@ export default function NewMatchAndroid() {
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           {/* Header Mobile */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard'))}>
               <Icon name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 12 }}>
@@ -198,6 +249,7 @@ export default function NewMatchAndroid() {
             ) : photoUri ? (
               <View style={styles.photoWrapper}>
                 <Image
+                  key={photoUri}
                   source={{ uri: photoUri }}
                   style={styles.photo}
                   resizeMode="cover"
@@ -218,7 +270,7 @@ export default function NewMatchAndroid() {
 
             {!cameraOpen && (
             <View style={styles.btnRow}>
-              <TouchableOpacity style={[styles.photoActionBtn, styles.btnGreen]} onPress={() => setCameraOpen(true)}>
+              <TouchableOpacity style={[styles.photoActionBtn, styles.btnGreen]} onPress={handleLaunchCamera}>
                 <Icon name="camera" size={18} color="#FFFFFF" />
                 <Text style={styles.photoBtnText}>{photoUri ? 'Tirar Outra' : 'Tirar Foto'}</Text>
               </TouchableOpacity>

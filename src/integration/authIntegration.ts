@@ -5,13 +5,13 @@ import * as authMock from './authMock';
 // Backend de login da Fatec (Spring Boot + JWT).
 // O token JWT fica num cookie httpOnly setado pelo servidor, por isso toda
 // chamada precisa de `credentials: 'include'` (fetch) / `withCredentials` (axios).
-export const API_URL = 'https://login-api-j9cl.onrender.com/fatec/login';
+export const API_URL = 'https://login-p26w.onrender.com/fatec/login';
 
 // false = usa a API de verdade acima (com cookie). É o que vale na entrega.
 // true  = usa o login de mentira (contas salvas no aparelho, sem internet).
 //         Serve pra testar o resto do app se a API estiver fora do ar.
 //         Entra com "futfoto" / "123456" ou cadastra uma conta.
-export const USE_MOCK = true;
+export const USE_MOCK = false;
 
 // Tempo máximo de espera. O Render (plano grátis) pode levar ~1 min pra "acordar".
 const TIMEOUT_MS = 60000;

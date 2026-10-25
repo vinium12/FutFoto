@@ -96,7 +96,7 @@ export default function DashboardAndroid() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" backgroundColor={Colors.background} />
+      <StatusBar style="light" />
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView

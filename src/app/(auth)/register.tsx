@@ -124,7 +124,7 @@ export default function RegisterScreen() {
             />
 
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)'))}
               style={styles.backButton}
             >
               <Text style={styles.backButtonText}>Já possui uma conta? <Text style={styles.loginHighlight}>Fazer Login</Text></Text>

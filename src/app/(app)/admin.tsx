@@ -31,7 +31,7 @@ export default function AdminScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard'))}>
             <Icon name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
           <View style={{ flex: 1, marginLeft: 12 }}>
@@ -112,7 +112,7 @@ export default function AdminScreen() {
           <Button
             title="Voltar ao Dashboard"
             variant="secondary"
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard'))}
             style={{ marginTop: 20 }}
           />
         </ScrollView>

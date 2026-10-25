@@ -6,8 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -63,8 +63,18 @@ export default function NewMatchAndroid() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         try {
+          const previewUri = asset.uri || (asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
+        if (previewUri) {
+          setPhotoUri(previewUri);
+        }
+        try {
           const savedUri = await persistPhoto(asset.uri);
-          setPhotoUri(savedUri || asset.uri);
+          if (savedUri) {
+            setPhotoUri(savedUri);
+          }
+        } catch (e) {
+          console.warn('Erro ao persistir na pasta:', e);
+        }
         } catch {
           if (asset.base64) {
             setPhotoUri(`data:image/jpeg;base64,${asset.base64}`);
@@ -101,8 +111,18 @@ export default function NewMatchAndroid() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         try {
+          const previewUri = asset.uri || (asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
+        if (previewUri) {
+          setPhotoUri(previewUri);
+        }
+        try {
           const savedUri = await persistPhoto(asset.uri);
-          setPhotoUri(savedUri || asset.uri);
+          if (savedUri) {
+            setPhotoUri(savedUri);
+          }
+        } catch (e) {
+          console.warn('Erro ao persistir na pasta:', e);
+        }
         } catch {
           if (asset.base64) {
             setPhotoUri(`data:image/jpeg;base64,${asset.base64}`);
@@ -252,7 +272,10 @@ export default function NewMatchAndroid() {
                   key={photoUri}
                   source={{ uri: photoUri }}
                   style={styles.photo}
-                  resizeMode="cover"
+                  contentFit="cover"
+                  transition={200}
+                  priority="high"
+                  cachePolicy="none"
                 />
                 <TouchableOpacity
                   style={styles.removePhotoBtn}
@@ -505,20 +528,26 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 240,
     borderRadius: 14,
-    overflow: 'hidden',
     marginBottom: 14,
     backgroundColor: Colors.surfaceLight,
   },
   photo: {
     width: '100%',
-    height: '100%',
+    height: 240,
+    borderRadius: 14,
   },
   removePhotoBtn: {
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+    elevation: 10,
   },
   noPhotoBox: {
     height: 140,

@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -153,7 +153,7 @@ export default function DashboardAndroid() {
               {/* Foto do Jogador */}
               <View style={styles.cardImageWrapper}>
                 {item.photoUri ? (
-                  <Image source={{ uri: item.photoUri }} style={styles.cardImage} resizeMode="cover" />
+                  <Image source={{ uri: item.photoUri }} style={styles.cardImage} contentFit="cover" transition={200} />
                 ) : (
                   <View style={styles.cardImagePlaceholder}>
                     <Ionicons name="person" size={40} color={Colors.textMuted} />

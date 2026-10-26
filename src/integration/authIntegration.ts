@@ -47,14 +47,18 @@ async function post(caminho: string, corpo?: object): Promise<Response> {
 }
 
 // Converte a resposta da API em erro legível (ou nos dados do usuário, se deu certo).
-async function tratarResposta(resp: Response): Promise<AuthState> {
+async function tratarResposta(resp: Response, isCreate: boolean = false): Promise<AuthState> {
   if (!resp.ok) {
     let mensagem = 'Não foi possível concluir a operação. Tente novamente.';
 
-    if (resp.status === 401 || resp.status === 403) {
-      mensagem = 'Usuário ou senha inválidos.';
-    } else if (resp.status === 409) {
-      mensagem = 'Esse usuário já existe.';
+    if (isCreate) {
+      if (resp.status === 403 || resp.status === 409) {
+        mensagem = 'Este nome de usuário já está em uso. Por favor, escolha outro.';
+      }
+    } else {
+      if (resp.status === 401 || resp.status === 403) {
+        mensagem = 'Usuário ou senha inválidos.';
+      }
     }
 
     try {
@@ -81,7 +85,7 @@ export async function login(username: string, password: string): Promise<AuthSta
   if (USE_MOCK) return authMock.login(username, password);
 
   const resp = await post('/v1/auth', { username, password });
-  return tratarResposta(resp);
+  return tratarResposta(resp, false);
 }
 
 // POST /v1/create — cria um novo usuário e já efetua o login.
@@ -94,7 +98,7 @@ export async function register(
   if (USE_MOCK) return authMock.register(username, password, email, cep);
 
   const resp = await post('/v1/create', { username, password, email, cep });
-  return tratarResposta(resp);
+  return tratarResposta(resp, true);
 }
 
 // POST /v1/logout — limpa o cookie do token no backend.

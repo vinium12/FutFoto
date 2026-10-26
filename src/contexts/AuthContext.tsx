@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthState } from '@/@types/auth';
 import * as authIntegration from '@/integration/authIntegration';
@@ -14,11 +16,74 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-// Chave nova (v2) de propósito: invalida sessões "fake" salvas pelo login antigo (mock).
-const STORAGE_AUTH_KEY = '@futfoto:auth:v2';
+// SecureStore aceita apenas caracteres alfanuméricos, '.', '-' e '_'.
+const SECURE_AUTH_KEY = 'futfoto_auth_v2';
+const LEGACY_STORAGE_KEY = '@futfoto:auth:v2';
 
-// O token em si fica no cookie httpOnly do servidor. Aqui guardamos só os dados
-// públicos do usuário (id, nome, roles) para saber que ele está logado.
+// O token em si fica no cookie httpOnly do servidor. No SecureStore guardamos
+// os dados da sessão do usuário (id, nome, roles) com proteção de hardware (Keystore / Keychain).
+async function getStoredAuth(): Promise<AuthState | null> {
+  try {
+    if (Platform.OS !== 'web') {
+      const isAvailable = await SecureStore.isAvailableAsync().catch(() => false);
+      if (isAvailable) {
+        const storagedAuth = await SecureStore.getItemAsync(SECURE_AUTH_KEY);
+        if (storagedAuth) {
+          return JSON.parse(storagedAuth);
+        }
+      }
+    }
+
+    // Fallback para Web ou migração da versão anterior salva em AsyncStorage
+    const legacyAuth = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacyAuth) {
+      const parsed = JSON.parse(legacyAuth);
+      if (Platform.OS !== 'web') {
+        const isAvailable = await SecureStore.isAvailableAsync().catch(() => false);
+        if (isAvailable) {
+          await SecureStore.setItemAsync(SECURE_AUTH_KEY, legacyAuth);
+          await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
+      }
+      return parsed;
+    }
+  } catch (error) {
+    console.error('Erro ao ler sessão armazenada:', error);
+  }
+  return null;
+}
+
+async function setStoredAuth(novoAuth: AuthState): Promise<void> {
+  const jsonValue = JSON.stringify(novoAuth);
+  try {
+    if (Platform.OS !== 'web') {
+      const isAvailable = await SecureStore.isAvailableAsync().catch(() => false);
+      if (isAvailable) {
+        await SecureStore.setItemAsync(SECURE_AUTH_KEY, jsonValue);
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => {});
+        return;
+      }
+    }
+    await AsyncStorage.setItem(LEGACY_STORAGE_KEY, jsonValue);
+  } catch (error) {
+    console.error('Erro ao salvar sessão no SecureStore:', error);
+  }
+}
+
+async function removeStoredAuth(): Promise<void> {
+  try {
+    if (Platform.OS !== 'web') {
+      const isAvailable = await SecureStore.isAvailableAsync().catch(() => false);
+      if (isAvailable) {
+        await SecureStore.deleteItemAsync(SECURE_AUTH_KEY).catch(() => {});
+      }
+    }
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => {});
+  } catch (error) {
+    console.error('Erro ao remover sessão:', error);
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,9 +91,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function loadStorageAuth() {
       try {
-        const storagedAuth = await AsyncStorage.getItem(STORAGE_AUTH_KEY);
+        const storagedAuth = await getStoredAuth();
         if (storagedAuth) {
-          setAuth(JSON.parse(storagedAuth));
+          setAuth(storagedAuth);
         }
       } catch (error) {
         console.error('Erro ao carregar dados de autenticação:', error);
@@ -41,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   async function saveAuth(novoAuth: AuthState) {
-    await AsyncStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify(novoAuth));
+    await setStoredAuth(novoAuth);
     setAuth(novoAuth);
   }
 
@@ -58,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     try {
       await authIntegration.logout(); // limpa o cookie no servidor (melhor esforço)
-      await AsyncStorage.removeItem(STORAGE_AUTH_KEY);
+      await removeStoredAuth();
       setAuth(null);
     } catch (error) {
       console.error('Erro ao sair:', error);

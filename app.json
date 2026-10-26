@@ -53,7 +53,8 @@
         {
           "locationWhenInUsePermission": "A localização identifica onde a partida aconteceu."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

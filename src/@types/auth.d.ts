@@ -19,7 +19,7 @@ export interface User {
   avatarUrl?: string;
 }
 
-// O que o app guarda no AsyncStorage: só dados públicos (sem token).
+// O que o app guarda no SecureStore: só dados públicos (sem token).
 export interface AuthState {
   user: User;
   roles: (Role | string)[];

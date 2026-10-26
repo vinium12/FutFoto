@@ -25,6 +25,27 @@ export default function AdminScreen() {
     activeMatches: 12,
   });
 
+  const isAdmin = auth?.roles?.some((r) => String(r).toUpperCase().includes('ADMIN'));
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={{ title: 'Acesso Negado', headerShown: false }} />
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+          <Icon name="lock-closed-outline" size={64} color={Colors.danger} />
+          <Text style={[styles.title, { marginTop: 16, textAlign: 'center' }]}>Acesso Restrito</Text>
+          <Text style={[styles.subtitle, { textAlign: 'center', marginTop: 8, marginBottom: 24 }]}>
+            Este módulo é exclusivo para usuários com perfil de Administrador (ROLE_ADMIN). Seu perfil atual é: {auth?.roles?.join(', ') || 'USER'}.
+          </Text>
+          <Button
+            title="Voltar ao Dashboard"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard'))}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ title: 'Painel Admin', headerShown: false }} />

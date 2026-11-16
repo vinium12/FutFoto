@@ -9,6 +9,7 @@ export interface ChannelConfig {
   vibrationPattern?: number[];
   lightColor?: string;
   sound?: string | null;
+  enableVibrate?: boolean;
 }
 
 /**
@@ -21,16 +22,34 @@ export async function createNotificationChannel(config: ChannelConfig): Promise<
   }
 
   try {
-    return await Notifications.setNotificationChannelAsync(config.id, {
+    // Configuração limpa e robusta para evitar NullPointerException na serialização nativa do Android
+    const channelInput: Notifications.NotificationChannelInput = {
       name: config.name,
-      description: config.description,
-      importance: config.importance ?? Notifications.AndroidImportance.MAX,
-      vibrationPattern: config.vibrationPattern ?? [0, 250, 250, 250],
-      lightColor: config.lightColor ?? '#00E676',
-      sound: config.sound ?? 'default',
-    });
+      importance: config.importance ?? Notifications.AndroidImportance.HIGH,
+      enableVibrate: config.enableVibrate ?? true,
+    };
+
+    if (config.description) {
+      channelInput.description = config.description;
+    }
+
+    if (config.lightColor) {
+      channelInput.lightColor = config.lightColor;
+    }
+
+    // Apenas repassa sound se for um arquivo customizado explícito (diferente de 'default')
+    if (config.sound && config.sound !== 'default') {
+      channelInput.sound = config.sound;
+    }
+
+    // Apenas inclui vibrationPattern se fornecido explicitamente para não quebrar em versões nativas do Android
+    if (config.vibrationPattern && config.vibrationPattern.length > 0) {
+      channelInput.vibrationPattern = config.vibrationPattern;
+    }
+
+    return await Notifications.setNotificationChannelAsync(config.id, channelInput);
   } catch (error) {
-    console.error(`[Notifications] Erro ao criar canal '${config.id}':`, error);
+    console.warn(`[Notifications] Aviso ao criar canal '${config.id}':`, error);
     return null;
   }
 }
@@ -48,8 +67,8 @@ export async function setupDefaultChannels(): Promise<void> {
     id: 'matches',
     name: 'Partidas e Jogos',
     description: 'Avisos sobre cadastro e confirmação de novas partidas',
-    importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 300, 200, 300],
+    importance: Notifications.AndroidImportance.HIGH,
+    enableVibrate: true,
     lightColor: '#00E676',
   });
 
@@ -58,8 +77,8 @@ export async function setupDefaultChannels(): Promise<void> {
     id: 'general',
     name: 'Geral',
     description: 'Notificações informativas do FutFoto',
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 200, 200],
+    importance: Notifications.AndroidImportance.DEFAULT,
+    enableVibrate: true,
     lightColor: '#00E676',
   });
 }

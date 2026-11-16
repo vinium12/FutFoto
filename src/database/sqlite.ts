@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { MatchPlayerRecord } from '@/@types/match';
-import { INITIAL_MOCK_MATCHES } from '@/integration/matchStorage';
+import { INITIAL_MOCK_MATCHES } from '@/data/mockMatches';
 
 const DATABASE_NAME = 'futfoto.db';
 let dbInstance: SQLite.SQLiteDatabase | null = null;

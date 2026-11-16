@@ -4,11 +4,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { MatchPlayerRecord } from '@/@types/match';
 import { persistPhoto, deletePhoto } from './photoStorage';
+import {
+  initSqliteDatabase,
+  getSqliteMatches,
+  saveSqliteMatch,
+  deleteSqliteMatch,
+} from '@/database';
 
 const FILE_NAME = 'partidas_banco.json';
 const STORAGE_KEY = '@futfoto:partidas_json_db';
 
-// Dados iniciais padrão do banco de dados .json
+// Dados iniciais padrão do banco de dados
 export const INITIAL_MOCK_MATCHES: MatchPlayerRecord[] = [
   {
     id: '1',
@@ -48,39 +54,28 @@ export const INITIAL_MOCK_MATCHES: MatchPlayerRecord[] = [
   }
 ];
 
-// Caminho do arquivo físico .json no dispositivo
-function getDatabaseFileUri(): string | null {
-  if (Platform.OS !== 'web' && FileSystem.documentDirectory) {
-    return `${FileSystem.documentDirectory}${FILE_NAME}`;
-  }
-  return null;
-}
+let sqliteInitialized = false;
 
-// Leitura da base de dados do arquivo .json
-export async function getMatches(): Promise<MatchPlayerRecord[]> {
-  const fileUri = getDatabaseFileUri();
-
-  if (fileUri) {
+async function ensureSqliteReady(): Promise<void> {
+  if (Platform.OS !== 'web' && !sqliteInitialized) {
     try {
-      const fileInfo = await FileSystem.getInfoAsync(fileUri);
-      if (fileInfo.exists) {
-        const content = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        return JSON.parse(content);
-      } else {
-        // Se o arquivo .json ainda não existe, cria com os dados iniciais
-        await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(INITIAL_MOCK_MATCHES, null, 2), {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        return INITIAL_MOCK_MATCHES;
-      }
-    } catch (e) {
-      console.warn('Erro ao ler arquivo .json no FileSystem:', e);
+      await initSqliteDatabase();
+      sqliteInitialized = true;
+    } catch (error) {
+      console.warn('[MatchStorage] Não foi possível inicializar SQLite:', error);
     }
   }
+}
 
-  // Fallback para Web / AsyncStorage
+// Leitura das partidas: SQLite no Mobile e AsyncStorage na Web (PC)
+export async function getMatches(): Promise<MatchPlayerRecord[]> {
+  // Mobile (Android / iOS): expo-sqlite
+  if (Platform.OS !== 'web') {
+    await ensureSqliteReady();
+    return await getSqliteMatches();
+  }
+
+  // Web (PC / Navegador): AsyncStorage fallback
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -93,38 +88,8 @@ export async function getMatches(): Promise<MatchPlayerRecord[]> {
   }
 }
 
-// Grava a lista inteira no banco.
-// CELULAR: o arquivo .json é o banco principal (erro aqui sobe pro usuário);
-//          o AsyncStorage é só cópia de segurança.
-// NAVEGADOR: o AsyncStorage (localStorage) é o único lugar, então avisa se estourar o limite.
-async function writeAll(list: MatchPlayerRecord[]): Promise<void> {
-  const jsonContent = JSON.stringify(list, null, 2);
-  const fileUri = getDatabaseFileUri();
-
-  if (fileUri) {
-    await FileSystem.writeAsStringAsync(fileUri, jsonContent, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
-    } catch (e) {
-      console.warn('Cópia de segurança no AsyncStorage falhou:', e);
-    }
-    return;
-  }
-
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, jsonContent);
-  } catch {
-    throw new Error('Sem espaço para guardar os registros neste navegador. Apague alguns e tente de novo.');
-  }
-}
-
-// Gravação direta na base de dados do arquivo .json
+// Salva nova partida: SQLite no Mobile e AsyncStorage na Web
 export async function saveMatch(match: Omit<MatchPlayerRecord, 'id' | 'matchDate'>): Promise<MatchPlayerRecord> {
-  const current = await getMatches();
-
-  // Guarda a foto em arquivo (celular) ou reduzida (navegador); no banco vai só a referência
   const photoUri = await persistPhoto(match.photoUri);
 
   const newRecord: MatchPlayerRecord = {
@@ -134,26 +99,47 @@ export async function saveMatch(match: Omit<MatchPlayerRecord, 'id' | 'matchDate
     matchDate: new Date().toISOString(),
   };
 
-  try {
-    await writeAll([newRecord, ...current]);
-  } catch (e) {
-    await deletePhoto(photoUri); // não deixa foto órfã se o registro não foi salvo
-    throw e;
+  // Mobile: persistência com expo-sqlite
+  if (Platform.OS !== 'web') {
+    await ensureSqliteReady();
+    try {
+      await saveSqliteMatch(newRecord);
+      return newRecord;
+    } catch (e) {
+      await deletePhoto(photoUri);
+      throw e;
+    }
   }
 
-  return newRecord;
+  // Web: persistência com AsyncStorage
+  const current = await getMatches();
+  try {
+    const updated = [newRecord, ...current];
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated, null, 2));
+    return newRecord;
+  } catch (e) {
+    await deletePhoto(photoUri);
+    throw new Error('Sem espaço para guardar os registros neste navegador. Apague alguns e tente de novo.');
+  }
 }
 
-// Remoção de registro do arquivo .json
+// Remoção de registro
 export async function deleteMatch(id: string): Promise<void> {
   const current = await getMatches();
   const removed = current.find((m) => m.id === id);
 
-  await writeAll(current.filter((m) => m.id !== id));
+  if (Platform.OS !== 'web') {
+    await ensureSqliteReady();
+    await deleteSqliteMatch(id);
+  } else {
+    const filtered = current.filter((m) => m.id !== id);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered, null, 2));
+  }
+
   await deletePhoto(removed?.photoUri ?? null);
 }
 
-// Exporta o banco .json: baixa o arquivo (navegador) ou abre o "compartilhar" (celular)
+// Exporta o banco: baixa o arquivo (navegador) ou abre o "compartilhar" (celular)
 export async function exportMatchesJsonFile(): Promise<void> {
   const matches = await getMatches();
   const jsonContent = JSON.stringify(matches, null, 2);

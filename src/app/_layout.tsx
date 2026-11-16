@@ -1,16 +1,24 @@
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/colors';
 import { initNotifications } from '@/notifications';
+import { initSqliteDatabase } from '@/database';
 
 export default function RootLayout() {
   useEffect(() => {
-    initNotifications(true).catch((err) => {
-      console.warn('[RootLayout] Não foi possível inicializar notificações:', err);
-    });
+    // Base de dados local (expo-sqlite) e notificações apenas no Mobile
+    if (Platform.OS !== 'web') {
+      initSqliteDatabase().catch((err) => {
+        console.warn('[RootLayout] Não foi possível inicializar SQLite:', err);
+      });
+      initNotifications(true).catch((err) => {
+        console.warn('[RootLayout] Não foi possível inicializar notificações:', err);
+      });
+    }
   }, []);
 
   return (

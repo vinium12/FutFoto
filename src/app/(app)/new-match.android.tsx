@@ -237,7 +237,7 @@ export default function NewMatchAndroid() {
         console.warn('[NewMatchAndroid] Falha ao disparar notificação:', err);
       });
 
-      showCustomAlert('Sucesso!', 'Dados do jogador e foto salvos no banco de dados JSON!', [
+      showCustomAlert('Sucesso!', 'Dados do jogador e foto salvos no banco de dados SQLite!', [
         {
           text: 'OK',
           onPress: () => (router.canGoBack() ? router.back() : router.replace('/(app)/dashboard')),

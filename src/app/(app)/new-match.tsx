@@ -17,6 +17,7 @@ import { Input } from '@/components/input';
 import { Button } from '@/components/button';
 import { showCustomAlert } from '@/components/alert';
 import { saveMatch } from '@/integration/matchStorage';
+import { sendLocalNotification } from '@/notifications';
 
 const POSITIONS = ['Atacante', 'Meio-Campo', 'Lateral', 'Zagueiro', 'Goleiro'];
 const COMMON_LOCATIONS = [
@@ -85,6 +86,15 @@ export default function NewMatchWeb() {
           city: locationCity || 'Cidade não especificada',
         },
         notes: notes.trim(),
+      });
+
+      sendLocalNotification({
+        title: 'Partida Registrada! ⚽',
+        body: `Os dados do atleta ${playerName.trim()} foram salvos com sucesso!`,
+        channelId: 'matches',
+        data: { playerName: playerName.trim() },
+      }).catch((err) => {
+        console.warn('[NewMatchWeb] Falha ao disparar notificação:', err);
       });
 
       showCustomAlert('Sucesso!', 'Dados do jogador registrados no banco de dados JSON!', [

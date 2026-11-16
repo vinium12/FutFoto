@@ -1,11 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/colors';
+import { initNotifications } from '@/notifications';
 
 export default function RootLayout() {
+  useEffect(() => {
+    initNotifications(true).catch((err) => {
+      console.warn('[RootLayout] Não foi possível inicializar notificações:', err);
+    });
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

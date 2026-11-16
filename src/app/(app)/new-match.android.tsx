@@ -20,6 +20,7 @@ import { showCustomAlert } from '@/components/alert';
 import { CameraPanel } from '@/components/camera-panel';
 import { saveMatch } from '@/integration/matchStorage';
 import { persistPhoto } from '@/integration/photoStorage';
+import { sendLocalNotification } from '@/notifications';
 
 const POSITIONS = ['Atacante', 'Meio-Campo', 'Lateral', 'Zagueiro', 'Goleiro'];
 
@@ -225,6 +226,15 @@ export default function NewMatchAndroid() {
           longitude,
         },
         notes: notes.trim(),
+      });
+
+      sendLocalNotification({
+        title: 'Partida Registrada! ⚽',
+        body: `Os dados e foto do atleta ${playerName.trim()} foram salvos com sucesso!`,
+        channelId: 'matches',
+        data: { playerName: playerName.trim() },
+      }).catch((err) => {
+        console.warn('[NewMatchAndroid] Falha ao disparar notificação:', err);
       });
 
       showCustomAlert('Sucesso!', 'Dados do jogador e foto salvos no banco de dados JSON!', [
